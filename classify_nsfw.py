@@ -14,6 +14,7 @@ import time
 from PIL import Image
 from StringIO import StringIO
 import caffe
+import cv2
 
 
 def resize_image(data, sz=(256, 256)):
@@ -79,10 +80,7 @@ def caffe_preprocess_and_compute(pimg, caffe_transformer=None, caffe_net=None,
     else:
         return []
 
-
-def main(argv):
-    pycaffe_dir = os.path.dirname(__file__)
-
+def get_args(argv):
     parser = argparse.ArgumentParser()
     # Required arguments: input file.
     parser.add_argument(
@@ -99,8 +97,10 @@ def main(argv):
         "--pretrained_model",
         help="Trained model weights file."
     )
-
     args = parser.parse_args()
+    return args
+
+def main(args):
     image_data = open(args.input_file).read()
 
     # Pre-load caffe model.
@@ -121,8 +121,33 @@ def main(argv):
     # Scores is the array containing SFW / NSFW image probabilities
     # scores[1] indicates the NSFW probability
     print "NSFW score:  " , scores[1]
-
+    return scores[1]
 
 
 if __name__ == '__main__':
-    main(sys.argv)
+    args = get_args(sys.argv)
+    nsfw = main(args)
+    image_name = args.input_file
+    min_range = np.array([0, 48, 80], dtype = "uint8")
+    max_range = np.array([20, 255, 255], dtype = "uint8")
+    source_image = cv2.imread(image_name)
+    frame_hsv = cv2.cvtColor(source_image, cv2.COLOR_BGR2HSV)
+    frame_filtered = cv2.inRange(frame_hsv, min_range, max_range)
+    eroded_image = cv2.erode(frame_filtered, None, iterations=2)
+    skin_region = cv2.dilate(eroded_image, None, iterations=2)
+    _, contours, _ = cv2.findContours(skin_region, cv2.RETR_TREE,cv2.CHAIN_APPROX_SIMPLE)
+    total_area, skin_area = 0, 0
+    for c in contours:
+        contour_area = cv2.contourArea(c)
+        _x, _y, width, height = cv2.boundingRect(c)
+        box_area = width*height
+        skin_area += contour_area
+        total_area += box_area
+    skin_ratio = float(skin_area)/float(total_area)
+    print("Skin area {}".format(skin_ratio))
+    if nsfw > 0.70:
+        print("Classified nude")
+    elif nsfw > 0.05 and skin_ratio > 0.35:
+        print("Classified nude")
+    else:
+        print("Classified non-nude")
