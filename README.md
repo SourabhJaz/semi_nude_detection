@@ -1,3 +1,5 @@
+# Semi nude detection
+
 An extension to Yahoo's open NSFW model. NSFW model is suitable to classify pornographic/nude images. This project is to add one more layer to NSFW model and classify semi-nude images. To do this skin area exposed in image is used.
 
 Steps to run semi-nude classifier
